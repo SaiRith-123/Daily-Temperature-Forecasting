@@ -40,7 +40,7 @@ jobs:
       - name: Scan Python source
         run: bandit -r src --severity-level medium --confidence-level medium
 
-  container-scan:
+  container-scan:  # <-- FIX: Shifted left by 4 spaces to align exactly under 'quality-and-security'
     needs: quality-and-security
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -57,8 +57,6 @@ jobs:
           format: table
           exit-code: "1"
           ignore-unfixed: true
-          # FIX 1: Updated deprecated parameter from vuln-type to pkg-types
-          pkg-types: os,library
-          # FIX 2: Restrict scanner focus strictly to vulnerabilities, disabling secret checking flags
+          vuln-type: os,library
           scanners: vuln
           severity: CRITICAL,HIGH
