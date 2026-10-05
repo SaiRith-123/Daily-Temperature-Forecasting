@@ -1,0 +1,13 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+env/
+.env
+.ipynb_checkpoints/
+mlruns/
+mlartifacts/
+mlflow.db
+models/*
+!models/.gitkeep

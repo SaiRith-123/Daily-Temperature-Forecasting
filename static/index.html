@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="Secure daily weather forecasts for locations selected by name or on a map."
+    />
+    <title>Temperature Forecast</title>
+    <link rel="stylesheet" href="/styles.css" />
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+      crossorigin=""
+    />
+    <script
+      src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+      integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+      crossorigin=""
+      defer
+    ></script>
+    <script src="/dashboard.js" defer></script>
+  </head>
+  <body>
+    <dialog id="api-key-dialog" class="api-key-dialog" aria-labelledby="api-key-title">
+      <div class="dialog-content">
+        <p class="eyebrow">OPTIONAL AI FEATURES</p>
+        <h2 id="api-key-title">OpenAI API key</h2>
+        <p>
+          Enter a key for the optional long-range AI estimate, detailed
+          explanations, and weather Q&amp;A. It stays in this tab's memory and
+          is sent to this app only when you request an AI result.
+        </p>
+        <label class="field" for="openai-key">
+          <span>OpenAI API key</span>
+          <input
+            id="openai-key"
+            name="openai-key"
+            type="password"
+            autocomplete="off"
+            spellcheck="false"
+            placeholder="sk-…"
+          />
+        </label>
+        <p class="privacy-note">
+          A browser key cannot be hidden from someone who can inspect this browser.
+          Do not use on a shared or untrusted device.
+        </p>
+        <div class="dialog-actions">
+          <button id="skip-api-key" class="secondary-button" type="button">Skip for now</button>
+          <button id="save-api-key" class="primary-button" type="button">Use for this tab</button>
+        </div>
+      </div>
+    </dialog>
+    <main class="page-shell">
+      <header class="hero">
+        <div class="brand-mark" aria-hidden="true">☀</div>
+        <div class="hero-copy">
+          <p class="eyebrow">LOCAL WEATHER · WORLDWIDE</p>
+          <h1>Temperature forecast</h1>
+          <p id="hero-location" class="hero-subtitle">Current weather forecast · Delhi, India</p>
+        </div>
+        <div class="hero-chip"><span class="live-dot"></span> Live forecast</div>
+      </header>
+
+      <section class="control-card" aria-labelledby="forecast-heading">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">PLAN AHEAD</p>
+            <h2 id="forecast-heading">Choose a location and forecast horizon</h2>
+          </div>
+          <span class="control-hint">Open-Meteo forecast: 16 days · AI projection: experimental beyond that</span>
+        </div>
+        <section class="location-picker" aria-labelledby="location-heading">
+          <div class="location-picker-heading">
+            <div>
+              <p class="eyebrow">FORECAST LOCATION</p>
+              <h3 id="location-heading">Search for a place or pick a point on the map</h3>
+            </div>
+            <span id="selected-location" class="selected-location">Delhi, India</span>
+          </div>
+          <form id="location-search-form" class="location-search-form">
+            <label class="field" for="location-search">
+              <span>City, town, or region</span>
+              <input
+                id="location-search"
+                name="location"
+                type="search"
+                maxlength="100"
+                autocomplete="off"
+                placeholder="e.g. Mumbai, India"
+                aria-controls="location-results"
+              />
+            </label>
+            <button id="location-search-button" class="secondary-button" type="submit">Search places</button>
+          </form>
+          <ul id="location-results" class="location-results" role="listbox" aria-label="Location search results" hidden></ul>
+          <p class="map-hint">Or click the map to forecast for an exact point. Drag and zoom to explore.</p>
+          <div id="location-map" class="location-map" role="application" aria-label="Interactive map to select a forecast location"></div>
+          <p id="map-status" class="map-status" role="status" aria-live="polite"></p>
+        </section>
+        <form id="forecast-form" class="forecast-form">
+          <div class="field horizon-field">
+            <label for="days">Days ahead <output id="days-value" for="days">7 days</output></label>
+            <input
+              id="days"
+              name="days"
+              type="range"
+              min="1"
+              max="365"
+              step="1"
+              value="7"
+              aria-label="Forecast days ahead"
+            />
+            <div class="range-labels" aria-hidden="true"><span>1 day</span><span>365 days</span></div>
+          </div>
+          <label class="field token-field">
+            <span>API access token <span class="required-note">required</span></span>
+            <input
+              id="api-token"
+              name="token"
+              type="password"
+              minlength="32"
+              autocomplete="off"
+              spellcheck="false"
+              placeholder="Paste DELHI_API_TOKEN"
+              required
+            />
+          </label>
+          <button id="forecast-button" class="primary-button" type="submit">
+            <span class="button-label">Generate forecast</span>
+            <span class="button-arrow" aria-hidden="true">→</span>
+          </button>
+        </form>
+        <p class="privacy-note">Your token stays in this tab and is never saved.</p>
+        <p id="notice" class="notice" role="status" aria-live="polite"></p>
+      </section>
+
+      <section class="chart-card" aria-labelledby="chart-heading">
+        <div class="section-heading chart-heading">
+          <div>
+            <p class="eyebrow">DAILY WEATHER ESTIMATES</p>
+            <h2 id="chart-heading">Daily mean temperature</h2>
+          </div>
+          <div class="legend" aria-label="Chart legend">
+            <span><i class="legend-dot predicted"></i>Open-Meteo forecast</span>
+            <span id="ai-forecast-legend" hidden><i class="legend-dot ai-predicted"></i><span id="ai-forecast-legend-label">Experimental estimate (unvalidated)</span></span>
+          </div>
+          <label class="unit-picker" for="temperature-unit">
+            <span>Graph units</span>
+            <select id="temperature-unit" aria-label="Graph temperature unit">
+              <option value="C">Celsius (°C)</option>
+              <option value="F">Fahrenheit (°F)</option>
+            </select>
+          </label>
+        </div>
+        <div id="chart-wrap" class="chart-wrap">
+          <div id="chart-empty" class="empty-state">
+            <div class="empty-icon" aria-hidden="true">↗</div>
+            <p>Choose a location, enter your API token, and generate a local temperature forecast.</p>
+          </div>
+          <svg
+            id="forecast-chart"
+            class="forecast-chart"
+            role="img"
+            aria-label="Daily mean temperatures forecast for the selected location"
+            hidden
+          ></svg>
+        </div>
+        <div class="chart-footnote">
+          <span>Daily mean temperature</span>
+          <span id="chart-unit-label">°C</span>
+        </div>
+        <details id="forecast-values" class="forecast-values" hidden>
+          <summary>View exact daily forecast values</summary>
+          <ol id="forecast-value-list"></ol>
+        </details>
+        <section id="current-conditions" class="current-conditions" aria-labelledby="current-conditions-heading">
+          <div class="current-conditions-heading">
+            <div>
+              <p class="eyebrow">LATEST AVAILABLE CONDITIONS</p>
+              <h3 id="current-conditions-heading">Current weather context</h3>
+            </div>
+            <a
+              id="current-conditions-source"
+              href="https://open-meteo.com/"
+              target="_blank"
+              rel="noopener noreferrer"
+            >Open-Meteo source</a>
+          </div>
+          <p class="current-conditions-note">
+            Updated model estimates, not independent weather-station observations.
+            Shared with AI explanations and estimates as context.
+          </p>
+          <div class="current-conditions-grid">
+            <div><span>Temperature</span><strong id="current-temperature">—</strong></div>
+            <div><span>Feels like</span><strong id="current-apparent-temperature">—</strong></div>
+            <div><span>Conditions</span><strong id="current-description">—</strong></div>
+            <div><span>Humidity</span><strong id="current-humidity">—</strong></div>
+            <div><span>Precipitation</span><strong id="current-precipitation">—</strong></div>
+            <div><span>Wind</span><strong id="current-wind">—</strong></div>
+          </div>
+          <p id="current-conditions-time" class="current-conditions-time">
+            Generate a forecast to load current conditions.
+          </p>
+        </section>
+        <section class="ai-explanation" aria-labelledby="ai-heading">
+          <div>
+            <h3 id="ai-heading">AI-assisted comparison</h3>
+            <p>
+              Add an experimental AI comparison for any selected horizon.
+              Through day 16, compare it with Open-Meteo; after that, AI
+              estimates the days for which no sourced forecast is available.
+              AI estimates are not validated weather predictions.
+            </p>
+            <p class="ai-hint">
+              Add AI estimate loads the current sourced forecast first if needed.
+              Longer horizons may take more time.
+            </p>
+          </div>
+          <p id="ai-disclaimer" class="ai-explanation-text" hidden></p>
+          <div class="ai-actions">
+            <button id="ai-estimate-button" class="secondary-button" type="button">
+              Add AI estimate
+            </button>
+            <button id="explain-button" class="secondary-button" type="button" disabled>
+              Explain forecast
+            </button>
+            <button id="api-key-settings" class="text-button" type="button">AI key settings</button>
+          </div>
+          <p id="ai-explanation" class="ai-explanation-text" role="status" hidden></p>
+        </section>
+        <section class="weather-chat" aria-labelledby="weather-chat-heading">
+          <h3 id="weather-chat-heading">Ask about the forecast</h3>
+          <p>
+            Ask for a detailed explanation of the available forecast. Answers
+            cannot verify weather beyond the Open-Meteo range.
+          </p>
+          <form id="weather-chat-form">
+            <label class="field" for="weather-question">
+              <span>Your question</span>
+              <textarea
+                id="weather-question"
+                name="question"
+                rows="3"
+                maxlength="1200"
+                placeholder="For example: What does the temperature trend mean, and how uncertain is it?"
+                required
+              ></textarea>
+            </label>
+            <button id="weather-chat-button" class="secondary-button" type="submit" disabled>
+              Ask AI
+            </button>
+          </form>
+          <div id="weather-chat-answer" class="weather-chat-answer" role="log" aria-live="polite" hidden></div>
+        </section>
+      </section>
+
+      <section class="details-grid" aria-label="Model and system details">
+        <article class="info-card model-card">
+          <div class="card-title-row">
+            <div>
+              <p class="eyebrow">LIVE WEATHER DATA</p>
+              <h2>Forecast source</h2>
+            </div>
+            <span class="model-icon" aria-hidden="true">°</span>
+          </div>
+          <div class="model-name">
+            <span class="status-dot" id="model-dot"></span>
+            <strong id="model-name">Open-Meteo — awaiting forecast</strong>
+          </div>
+          <dl class="metric-grid">
+            <div><dt>Days shown</dt><dd id="forecast-days">—</dd></div>
+            <div><dt>Avg daily mean</dt><dd id="forecast-average">—</dd></div>
+            <div><dt>Daily mean range</dt><dd id="forecast-range">—</dd></div>
+          </dl>
+          <p id="training-range" class="muted-copy">Daily forecast estimates provided by Open-Meteo.</p>
+        </article>
+
+        <article class="info-card status-card">
+          <div class="card-title-row">
+            <div>
+              <p class="eyebrow">SERVICE HEALTH</p>
+              <h2>System status</h2>
+            </div>
+            <span class="status-icon" aria-hidden="true">⌁</span>
+          </div>
+          <ul class="status-list">
+            <li><span>FastAPI service</span><strong id="api-status" class="status-value pending">Checking…</strong></li>
+            <li><span>Authenticated session</span><strong id="auth-status" class="status-value pending">Not connected</strong></li>
+            <li><span>Weather provider</span><strong id="model-status" class="status-value pending">Waiting for API</strong></li>
+            <li><span>Security checks</span><strong class="status-value neutral">CI gates configured</strong></li>
+          </ul>
+          <p class="muted-copy">Security status describes configured CI checks; this page does not query the latest workflow run.</p>
+        </article>
+      </section>
+
+      <footer class="page-footer">
+        <span>Daily Temperature Forecasting</span>
+        <span>Forecast data by <a href="https://open-meteo.com/" target="_blank" rel="noopener noreferrer">Open-Meteo</a>. Map tiles by <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a>. Estimates, not official weather advice.</span>
+      </footer>
+    </main>
+  </body>
+</html>
