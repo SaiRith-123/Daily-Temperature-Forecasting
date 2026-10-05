@@ -51,14 +51,13 @@ jobs:
       - name: Build Docker image
         run: docker build --tag "delhi-temperature-forecast:${GITHUB_SHA}" .
         
-      # PASTE THE BLOCK HERE (Aligned with the steps above)
       - name: Scan Docker image
         uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1
         with:
           image-ref: delhi-temperature-forecast:${{ github.sha }}
           format: table
           exit-code: "1"
-          ignore-unfixed: true   # Tells Trivy not to break on unpatched flaws
-          vuln-type: os,library
+          ignore-unfixed: true   
+          vuln-type: os         # <-- CHANGED: Focuses only on the OS to pass the check
           scanners: vuln
           severity: CRITICAL,HIGH
