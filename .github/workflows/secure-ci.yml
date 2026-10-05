@@ -40,7 +40,7 @@ jobs:
       - name: Scan Python source
         run: bandit -r src --severity-level medium --confidence-level medium
 
-  container-scan:  # <-- FIX: Shifted left by 4 spaces to align exactly under 'quality-and-security'
+  container-scan:
     needs: quality-and-security
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -50,13 +50,15 @@ jobs:
           persist-credentials: false
       - name: Build Docker image
         run: docker build --tag "delhi-temperature-forecast:${GITHUB_SHA}" .
+        
+      # PASTE THE BLOCK HERE (Aligned with the steps above)
       - name: Scan Docker image
-        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # v0.35.0
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1
         with:
           image-ref: delhi-temperature-forecast:${{ github.sha }}
           format: table
           exit-code: "1"
-          ignore-unfixed: true
+          ignore-unfixed: true   # Tells Trivy not to break on unpatched flaws
           vuln-type: os,library
           scanners: vuln
           severity: CRITICAL,HIGH
